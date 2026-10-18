@@ -38,7 +38,11 @@ Remit brings those saves together. Add a link, upload a PDF or image, or write a
 <br />
 <p align="center">
   <img src="docs/screenshots/landing.jpg" alt="Remit's landing page, with Save it. Find it again., example collections, features, and footer." width="740" />
+</p>
 
+<summary><strong>Library and search page</strong></summary>
+<br />
+<p align="center">
   <img src="docs/screenshots/library.jpg" alt="Remit's library page , it shows everything you have saved with tags search it with keywords or ask questions directly." width="740" />
 </p>
 </details>
