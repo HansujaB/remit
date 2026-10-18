@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+test-results/
+.test-fixtures/
+
+dist-server/
+.data/
+*.log

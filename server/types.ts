@@ -1,0 +1,50 @@
+export type Item = {
+  id: string;
+  title: string;
+  url: string;
+  canonicalUrl: string;
+  platform: string;
+  kind: string;
+  notes: string;
+  description: string;
+  createdAt: string;
+  favorite: boolean;
+  status: string;
+  coverage: string;
+  fileKey: string;
+  mime: string;
+  fileSize: number;
+  topics: string[];
+  generation: number;
+  attempts: number;
+  error: string;
+  manualTopics: boolean;
+  manualTitle: boolean;
+  content: string;
+  extraction: string;
+  [key: string]: any;
+};
+export type Chunk = {
+  id: string;
+  text: string;
+  location: string;
+  derived: boolean;
+  concepts: string[];
+  embedding?: number[];
+  [key: string]: any;
+};
+export type Extraction = {
+  title: string;
+  text: string;
+  coverage: string;
+  pages?: { text: string; location: string; derived?: boolean }[];
+  images?: string[];
+  adapter: string;
+  details?: Record<string, unknown>;
+};
+export type Assignment = {
+  name: string;
+  confidence: number;
+  quote: string;
+  reason: string;
+};
