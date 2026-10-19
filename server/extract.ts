@@ -49,7 +49,7 @@ function strings(values: unknown[]) {
 export function normalizeActor(row: any, source: string): Extraction {
   const pin = source === 'Pinterest';
   const pinTitle = pin ? [row.title, row.grid_title, row.seo_title].find(v => typeof v === 'string' && v.trim()) : '';
-  const title = strings(pin ? [pinTitle] : [row.title, row.article?.title, row.name]).slice(
+  const title = strings(pin ? [pinTitle] : source === 'Instagram' ? [row.title] : [row.title, row.article?.title, row.name]).slice(
     0,
     250,
   );

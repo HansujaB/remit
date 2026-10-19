@@ -16,9 +16,10 @@ test('real FalkorDB: isolation, concurrent dedupe, leases, evidence, hierarchy, 
     assert.equal(new Set(saves.map(s=>s.item.id)).size,1);const id=saves[0].item.id;
     assert.equal((await b.list()).items.length,0);await assert.rejects(b.get(id));
     const claims=await Promise.all([a.claim(),a.claim()]);assert.equal(claims.filter(Boolean).length,1);const job=claims.find(Boolean)!;
-    await a.patch(id,{topics:['Manual topic']});
+    await a.patch(id,{topics:['Manual topic'],title:'My own caching title'});
     const c1={id:randomUUID(),text:'Caching reduces latency but may return stale data.',location:'PDF page 1',derived:false,concepts:['caching'],embedding:Array.from({length:config.EMBEDDING_DIMENSIONS},(_,i)=>i===0?1:0)};
-    await a.commit(id,job.token,job.item.generation,[c1],[{name:'Automatic',quote:'Caching',reason:'Matches',confidence:0.9}],{description:'Caching guide',coverage:'partial content'});
+    await a.commit(id,job.token,job.item.generation,[c1],[{name:'Automatic',quote:'Caching',reason:'Matches',confidence:0.9}],{title:'Late generated title',description:'Caching guide',coverage:'partial content'});
+    assert.equal((await a.get(id)).title,'My own caching title');
     assert.deepEqual((await a.get(id)).topics,['Manual topic']);
     const second=await a.create({title:'Cache example',content:'This example uses caching.',kind:'note',topics:['Manual topic']});const next=await a.claim();assert.ok(next);
     await a.commit(second.item.id,next.token,next.item.generation,[{...c1,id:randomUUID(),text:'An example of caching with a short TTL.'}],[],{coverage:'full supported extraction'});

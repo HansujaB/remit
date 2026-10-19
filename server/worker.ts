@@ -7,6 +7,7 @@ import { config, HttpError, normalize } from "./config.js";
 import { storage } from "./storage.js";
 import type { Item } from "./types.js";
 import { TAGGING_VERSION } from './topic-policy.js';
+import { processedTitle } from './item-title.js';
 export async function processItem(lib: Library, item: Item, token: string, options: { localOnly?: boolean } = {}) {
   let stage = 'extraction';
   const timer = setInterval(
@@ -31,7 +32,7 @@ export async function processItem(lib: Library, item: Item, token: string, optio
       "MATCH (i:Item)-[:HAS_CHUNK]->(:Chunk)-[:MENTIONS]->(c:Concept) RETURN DISTINCT i.title AS title,c.name AS concept LIMIT 150",
     );
     if (options.localOnly) throw new HttpError(422, 'Local-only topic assignment is unavailable; model classification is required.');
-    const organized = await classify(extraction.text, { topics, preferences, relatedSaves: related });
+    const organized = await classify(extraction.text, { topics, preferences, relatedSaves: related }, {generateTitle:item.platform === 'Instagram' && !item.manualTitle});
     if (!organized.data.assignments.length) {
       // Retry automatically using the cached extraction; do not ask users to tag.
       throw new HttpError(429, 'Organization is still in progress. Another attempt will run automatically.');
@@ -86,8 +87,8 @@ export async function processItem(lib: Library, item: Item, token: string, optio
       }),
       extraction: "",
     };
-    if (!current.manualTitle && extraction.title)
-      patch.title = extraction.title.slice(0, 250);
+    const title = processedTitle(current, extraction.title || '', organized.data.title);
+    if (title) patch.title = title;
     stage = 'indexing';
     await lib.commit(
       item.id,

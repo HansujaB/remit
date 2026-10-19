@@ -308,7 +308,9 @@ export class Library {
     const query = `MATCH (i:Item {id:$id,lease:$token,generation:$generation}) WHERE i.status='processing'
       OPTIONAL MATCH (i)-[:HAS_CHUNK]->(old:Chunk) WITH i,collect(old) AS olds
       FOREACH (old IN olds | DETACH DELETE old)
+      WITH i, i.title AS previousTitle, coalesce(i.manualTitle,false) AS preserveTitle
       SET i += $patch, i.status='complete',i.leaseUntil=0,i.error='',i.extractionVersion=$version
+      SET i.title = CASE WHEN preserveTitle THEN previousTitle ELSE i.title END
       FOREACH (ch IN $chunks | CREATE (c:Chunk {id:ch.id,text:ch.text,location:ch.location,derived:ch.derived,version:$version,embeddingModel:$model}) MERGE (i)-[:HAS_CHUNK]->(c)
         FOREACH (v IN CASE WHEN size(ch.embedding)>0 THEN [1] ELSE [] END | SET c.vector=vecf32(ch.embedding))
         FOREACH (name IN ch.concepts | MERGE (concept:Concept {key:name}) ON CREATE SET concept.name=name MERGE (c)-[:MENTIONS]->(concept)))
