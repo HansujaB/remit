@@ -32,4 +32,3 @@ try {
   await db.selectGraph(lib.name).delete();
   await closeDatabase();
 }
-

@@ -39,11 +39,13 @@ Remit brings those saves together. Add a link, upload a PDF or image, or write a
 <p align="center">
   <img src="docs/screenshots/landing.jpg" alt="Remit's landing page, with Save it. Find it again., example collections, features, and footer." width="740" />
 </p>
+</details>
 
+<details open>
 <summary><strong>Library and search page</strong></summary>
 <br />
 <p align="center">
-  <img src="docs/screenshots/library.png" alt="Remit's library page , it shows everything you have saved with tags search it with keywords or ask questions directly." width="740" />
+  <img src="docs/screenshots/library.png" alt="Remit's library with saved items, topic tags, search, and Ask." width="740" />
 </p>
 </details>
 
@@ -53,6 +55,7 @@ Remit brings those saves together. Add a link, upload a PDF or image, or write a
 - **Organize by subject.** Related saves belong together regardless of their original platform. Automatic tags focus on the content's main subject.
 - **Find by words or meaning.** Search combines text matching, semantic similarity, and connections through shared concepts.
 - **Ask your library.** Get answers with citations to supporting saved passages, so you can return to the source.
+- **Explore a broad goal.** Ask whether you saved interview-prep material. Remit explores existing topics, follows shared concepts, shows matching saves, and can ask which role you mean. Expand **How I found this** to inspect actual retrieval calls.
 - **Keep your organization.** Explicit preferences and deliberate topic edits are retained during processing.
 - **Keep a personal library.** Clerk authenticates requests, and each user has a separate FalkorDB graph. Original uploads are served through authorized file access.
 
@@ -93,6 +96,25 @@ For example, two saved sources mentioning the same concept can be discovered thr
 
 See the implementation in [`server/graph.ts`](server/graph.ts) and [`server/retrieval.ts`](server/retrieval.ts).
 
+### Bounded, tool-driven Ask
+
+The Ask planner can select `explore_topics`, `search_saves`, or `find_connected_saves` after inspecting the available topics and previous results. It runs at most three planning rounds. Tools execute parameterized queries within the authenticated user's graph and preserve active library filters; the model cannot execute arbitrary Cypher.
+
+Discovery questions return saved-item cards with a short relevance explanation. A separate check filters candidates before displaying them: sharing a concept such as “machine learning” does not, by itself, make an AI-video save relevant to interview preparation. A follow-up narrows the original request, and **How I found this** shows the retrieval operations that actually ran.
+
+Both relevance decisions and automatic topic proposals require **model confidence of at least 70%** plus source support. This is an acceptance threshold, not a measured accuracy guarantee. There are no fixed subject lists or local keyword-to-topic fallbacks. Existing saved tags are not automatically rewritten by this change. If relevance checking fails, candidates are withheld; unsuccessful tagging uses bounded retries rather than invented labels.
+
+Groq receives bounded inputs at each stage:
+
+| Stage | Maximum supplied context |
+| --- | --- |
+| Retrieval planning | 80 topic names/counts and eight short result titles; up to three planning rounds |
+| Relevance checking | 12 candidates with titles, up to four topic labels each, and 240 characters each of description or, for content questions, a supporting excerpt |
+| Answer generation | Eight excerpts, at most 750 characters each and 6,000 source characters total |
+| Claim verification | Only proposed claims and cited quotes, capped at 8,000 serialized characters |
+
+These are character and item limits, not token counts. Full documents, raw extraction payloads, and embedding vectors are not included in Ask prompts. Discovery does not invoke the cited-answer generation stage.
+
 ## From a save to an answer
 
 ```mermaid
@@ -102,7 +124,7 @@ flowchart TD
     API -->|Uploaded originals| FILES[Cloudflare R2 / local development storage]
     DB -->|Queued item| WORKER[Background worker]
     WORKER --> EXTRACT[Extract text and metadata]
-    EXTRACT --> TAG[Subject tagging with local rules + Groq]
+    EXTRACT --> TAG[Subject tagging with Groq + evidence validation]
     TAG --> EMBED[Local Hugging Face embeddings]
     EMBED -->|Topics, concepts, chunks, vectors| DB
     API --> SEARCH[Text + semantic + graph retrieval]
@@ -170,6 +192,18 @@ npm run test:integration
 
 Integration coverage includes user isolation, duplicate saves, processing leases, evidence persistence, topic hierarchy, merge/undo, and ownership checks. Integration tests create temporary graphs and clean them up afterward.
 
+Optional live checks use synthetic content in temporary graphs and make billable Groq requests. Compile the server first and configure FalkorDB and Groq:
+
+```sh
+# Broad discovery: relevant interview saves, with unrelated subjects excluded
+node scripts/smoke-ask.mjs
+
+# Classification, local embeddings, retrieval, and a source-cited answer
+node scripts/smoke-pipeline.mjs
+```
+
+These scripts do not read personal libraries and delete their temporary graphs afterward. Model-dependent smoke results are not an accuracy benchmark.
+
 ## Project structure
 
 ```text
@@ -177,6 +211,8 @@ src/                  React interface, components, and client API
 server/               Express API, background worker, and extraction pipeline
   graph.ts            FalkorDB persistence and graph operations
   retrieval.ts        Search, graph expansion, and answer evidence
+  ask-agent.ts        Bounded tool selection and candidate relevance checks
+  ask-context.ts      Excerpt selection and source-text budgets
   ai.ts               Groq text inference
   embeddings.ts       Local text embeddings
   tests/              Backend and integration tests
