@@ -100,6 +100,66 @@ See the implementation in [`server/graph.ts`](server/graph.ts) and [`server/retr
 
 The Ask planner can select `explore_topics`, `search_saves`, or `find_connected_saves` after inspecting the available topics and previous results. It runs at most three planning rounds. Tools execute parameterized queries within the authenticated user's graph and preserve active library filters; the model cannot execute arbitrary Cypher.
 
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Ask interface
+    participant API as Remit API and tool executor
+    participant Groq as Groq planner and reviewer
+    participant DB as FalkorDB - user's graph
+
+    User->>UI: Ask a question about saved content
+    UI->>API: POST /api/ask with active filters
+    API->>DB: list_topics within the filtered library
+    DB-->>API: Topic names and save counts
+
+    loop Up to 3 planning rounds - stop early on finish
+        API->>Groq: Question, topic catalog, short result summaries
+        Groq-->>API: Choose next tool or finish
+        opt A retrieval tool is selected
+            alt explore_topics
+                API->>DB: Follow HAS_TOPIC and SUBTOPIC_OF
+            else search_saves
+                API->>DB: Text matching and semantic similarity
+            else find_connected_saves
+                API->>DB: Traverse shared MENTIONS concepts
+            end
+            DB-->>API: Candidate saves and source passages
+        end
+    end
+
+    opt Candidates were found
+        API->>Groq: check_relevance with bounded candidate summaries
+        Groq-->>API: Relevant IDs, reasons, confidence, optional clarification
+        Note over API: Keep supported candidates with confidence at least 70%
+    end
+
+    alt Discovery question
+        API-->>UI: Matching save cards and relevance explanations
+    else Content question with supporting excerpts
+        API->>API: read_evidence - at most 8 excerpts / 6000 characters
+        API->>Groq: Compose answer from these excerpts
+        Groq-->>API: Claims with source IDs and exact quotes
+        API->>API: Validate citation IDs and quotes
+        API->>Groq: Verify claims using cited quotes only
+        Groq-->>API: Supported claims
+        opt Supported claims remain
+            API->>DB: Store Answer with USES_ITEM and SUPPORTED_BY edges
+        end
+        API-->>UI: Verified answer and citations, or insufficient evidence
+    else No supporting excerpts
+        API-->>UI: Explain insufficient evidence
+    end
+
+    UI-->>User: Results, optional clarification, and actual retrieval activity
+    opt User provides a narrower focus
+        User->>UI: Answer the clarification
+        UI->>API: New Ask request with original question and focus
+    end
+```
+
+The server executes the planner's selected operation; Groq does not connect directly to FalkorDB. Graph traversal produces candidates, while the relevance check decides which candidates are useful for the question. **How I found this** displays the operations that actually ran, rather than a fixed list of simulated steps.
+
 Discovery questions return saved-item cards with a short relevance explanation. A separate check filters candidates before displaying them: sharing a concept such as “machine learning” does not, by itself, make an AI-video save relevant to interview preparation. A follow-up narrows the original request, and **How I found this** shows the retrieval operations that actually ran.
 
 Both relevance decisions and automatic topic proposals require **model confidence of at least 70%** plus source support. This is an acceptance threshold, not a measured accuracy guarantee. There are no fixed subject lists or local keyword-to-topic fallbacks. Existing saved tags are not automatically rewritten by this change. If relevance checking fails, candidates are withheld; unsuccessful tagging uses bounded retries rather than invented labels.
