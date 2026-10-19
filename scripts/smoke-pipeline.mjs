@@ -23,6 +23,7 @@ try {
   assert.equal(search.warnings.length, 0);
   console.log('Semantic retrieval: PASS');
   const answer = await ask(lib, { query: 'How long do stale cache entries remain?', semantic: true, graph: true });
+  if (answer.insufficient || !answer.sources.length) console.log(JSON.stringify({answer:answer.answer,trace:answer.trace,warnings:answer.warnings}));
   assert.equal(answer.insufficient, false);
   assert.ok(answer.sources.some(source => source.itemId === item.id));
   console.log('Groq answer with saved-source citations: PASS');
