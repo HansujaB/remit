@@ -6,7 +6,7 @@ import { classify, chunkText, embeddings } from "./ai.js";
 import { config, HttpError, normalize } from "./config.js";
 import { storage } from "./storage.js";
 import type { Item } from "./types.js";
-import { subjectAssignments, TAGGING_VERSION } from './topic-policy.js';
+import { TAGGING_VERSION } from './topic-policy.js';
 export async function processItem(lib: Library, item: Item, token: string, options: { localOnly?: boolean } = {}) {
   let stage = 'extraction';
   const timer = setInterval(
@@ -30,24 +30,8 @@ export async function processItem(lib: Library, item: Item, token: string, optio
     const related = await lib.q(
       "MATCH (i:Item)-[:HAS_CHUNK]->(:Chunk)-[:MENTIONS]->(c:Concept) RETURN DISTINCT i.title AS title,c.name AS concept LIMIT 150",
     );
-    let organized;
-    try {
-      if (options.localOnly) {
-        const assignments = subjectAssignments(extraction.text);
-        if (!assignments.length) throw new HttpError(422, 'No explicit subject available for local organization.');
-        organized = {data:{assignments,concepts:assignments.map(a=>({name:normalize(a.name),quote:a.quote}))},usage:undefined,diagnostics:{method:'local-only',acceptedTopics:assignments.length}};
-      } else {
-      organized = await classify(extraction.text, { topics, preferences, relatedSaves: related });
-      }
-    } catch (error) {
-      const assignments = subjectAssignments(extraction.text);
-      if (!assignments.length) throw error;
-      organized = {
-        data: {assignments, concepts: assignments.map(a => ({name:normalize(a.name),quote:a.quote}))},
-        usage: undefined,
-        diagnostics: {method:'local-fallback',acceptedTopics:assignments.length},
-      };
-    }
+    if (options.localOnly) throw new HttpError(422, 'Local-only topic assignment is unavailable; model classification is required.');
+    const organized = await classify(extraction.text, { topics, preferences, relatedSaves: related });
     if (!organized.data.assignments.length) {
       // Retry automatically using the cached extraction; do not ask users to tag.
       throw new HttpError(429, 'Organization is still in progress. Another attempt will run automatically.');

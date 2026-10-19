@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Library } from "./graph.js";
 import { embeddings, composeAnswer } from "./ai.js";
 import { HttpError, normalize } from "./config.js";
+import { exploreLibrary } from './ask-agent.js';
+import { compactEvidence } from './ask-context.js';
 
 export type SearchOptions = {
   query: string;
@@ -14,8 +16,9 @@ export type SearchOptions = {
   graph?: boolean;
   semantic?: boolean;
 };
+const queryStopWords = new Set('i me my we our you your did do does have has had save saved something anything related about to for the a an is are was were in on of and or it this that can could please show find'.split(' '));
 export const words = (s: string) =>
-  [...new Set(s.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [])].slice(
+  [...new Set(s.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [])].filter(w => !queryStopWords.has(w)).slice(
     0,
     24,
   );
@@ -185,9 +188,21 @@ export async function retrieve(lib: Library, o: SearchOptions) {
 export async function ask(lib: Library, o: SearchOptions) {
   if (!process.env.GROQ_API_KEY)
     throw new HttpError(503, "Configure GROQ_API_KEY to ask your library.");
-  const retrieval = await retrieve(lib, o);
+  const started = Date.now();
+  const explored = await exploreLibrary(lib, o, retrieve);
+  const retrieval = { ...explored, evidence: compactEvidence(explored.evidence, o.query), timingMs:Date.now()-started };
+  const extras = {matches:explored.matches, clarification:explored.clarification, trace:explored.trace,
+    selectedTopics:explored.selectedTopics};
+  if (explored.intent === 'discover') return {
+    ...extras, insufficient:!explored.matches.length,
+    answer: explored.matches.length
+      ? `I found ${explored.matches.length} potentially relevant save${explored.matches.length === 1 ? '' : 's'}${explored.selectedTopics.length ? ' while exploring ' + explored.selectedTopics.join(', ') : ''}. `
+      : 'I did not find matching saves in the current filters. Try a specific subject or broaden your filters.',
+    claims:[], sources:[], paths:explored.paths, warnings:explored.warnings,
+  };
   if (!retrieval.evidence.length)
     return {
+      ...extras,
       insufficient: true,
       answer:
         "There is not enough evidence in your saved content to answer this.",
@@ -197,6 +212,7 @@ export async function ask(lib: Library, o: SearchOptions) {
       warnings: retrieval.warnings,
     };
   const context = await lib.preferences();
+  extras.trace.push({tool:'read_evidence',count:retrieval.evidence.length,characters:retrieval.evidence.reduce((n,e)=>n+e.text.length,0)});
   const answer = await composeAnswer(
     o.query,
     retrieval.evidence,
@@ -207,6 +223,7 @@ export async function ask(lib: Library, o: SearchOptions) {
   );
   const id = randomUUID();
   const result = {
+    ...extras,
     id,
     insufficient: answer.insufficient,
     answer: answer.insufficient
