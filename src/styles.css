@@ -2780,3 +2780,9 @@ small,
 .ask-trace li span, .ask-trace code { font-size:11px; color:#888; }
 .ask-trace code { display:block; margin-top:5px; }
 @media(max-width:600px) { .ask-panel { padding:16px; } .ask-matches { grid-template-columns:1fr; } .ask-clarification { padding:14px; } }
+
+.manage-tags-button { justify-content:flex-start; font-size:12px; color:var(--muted); margin:2px 0 10px; }
+.tag-create-form { display:flex; gap:10px; align-items:center; margin:16px 0; }
+.tag-create-form input { flex:1; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; font:inherit; }
+.tag-create-form button { flex:none; }
+@media(max-width:480px) { .tag-create-form { flex-wrap:wrap; } .tag-create-form input { width:100%; flex-basis:100%; } }

@@ -31,6 +31,7 @@ export const config = {
   embeddingModel: process.env.EMBEDDING_MODEL || "Xenova/multilingual-e5-small",
 };
 export class HttpError extends Error {
+  retryAfterMs = 0;
   constructor(
     public status: number,
     message: string,

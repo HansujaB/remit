@@ -110,6 +110,7 @@ export async function processItem(lib: Library, item: Item, token: string, optio
       token,
       message,
       e instanceof HttpError && [400, 401, 403, 413, 503].includes(e.status),
+      e instanceof HttpError && e.status === 429 ? Math.max(60000,e.retryAfterMs) : 0,
     );
     console.error(
       JSON.stringify({

@@ -482,6 +482,7 @@ export function Workspace({ userId, name, demo = false, route, navigate }) {
           </Button>
         </div>
         <nav className="collection-nav" aria-label="Collections">
+          <Button className="text-button manage-tags-button" onClick={() => setModal("tags")}>Manage tags</Button>
           {counts.map(({ name, count }) => (
             <Button
               key={name}
@@ -934,6 +935,7 @@ export function Workspace({ userId, name, demo = false, route, navigate }) {
       {selectedItem && (
         <ItemDetail
           item={selectedItem}
+          onCreateTag={addTopic}
           topics={data.topics}
           onClose={() => setSelected(null)}
           onRefresh={refresh}
@@ -955,8 +957,10 @@ export function Workspace({ userId, name, demo = false, route, navigate }) {
           }}
         />
       )}
-      {modal === "settings" && (
+      {(modal === "settings" || modal === "tags") && (
         <SettingsModal
+          tagsOnly={modal === "tags"}
+          onCreateTopic={addTopic}
           data={data}
           demo={demo}
           onClose={() => setModal(null)}

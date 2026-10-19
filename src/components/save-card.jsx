@@ -1,3 +1,4 @@
+import { itemPreview } from "../lib/content-preview";
 import { useEffect, useState } from "react";
 import { ArrowRight, Bookmark } from "lucide-react";
 import { Button } from "./ui/button";
@@ -51,7 +52,7 @@ export function SaveCard({ item, onOpen, onFavorite, list = false }) {
             {item.sample && " · Sample"}
           </span>
           <h3>{item.title}</h3>
-          <p className="card-excerpt">{item.description}</p>
+          {itemPreview(item) && <p className="card-excerpt">{itemPreview(item)}</p>}
           <div className="card-meta">
             <span className="tag">{item.topics[0] || "Untagged"}</span>
             {item.topics.length > 1 && (

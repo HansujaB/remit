@@ -122,52 +122,12 @@ export function AskPanel({ query, topic, platform, favorite, onOpen }) {
     </section>
   );
 }
-export function EvidencePanel({ item, onRefresh }) {
-  const api = useApi();
-  const [evidence, setEvidence] = useState(null),
-    [error, setError] = useState("");
-  if (!api) return null;
+export function EvidencePanel({ item }) {
+  if (!item.error && item.status === "complete") return null;
   return (
-    <section className="backend-panel">
-      <p>
-        Processing: {item.status}
-      </p>
-      <p className="muted small-text">
-        Extraction: {item.coverage === 'full supported extraction' ? 'Text extracted' : item.coverage}
-      </p>
-      {item.error && <p role="alert">{userMessage(item.error)}</p>}
-      {item.status === "complete" && !item.topics?.length && (
-        <p>No topics are available for this save yet.</p>
-      )}
-      <details
-        onToggle={async (e) => {
-          if (e.currentTarget.open && !evidence)
-            try {
-              setEvidence(await api(`/items/${item.id}/evidence`));
-            } catch (err) {
-              setError(err.message);
-            }
-        }}
-      >
-        <summary>Why this collection?</summary>
-        {error && <p role="alert">{error}</p>}
-        {evidence?.assignments.map((a) => (
-          <div key={a.topic}>
-            <strong>{a.topic}</strong>
-            <p>{a.assignment.reason}</p>
-            {a.assignment.evidence && (
-              <blockquote>{a.assignment.evidence}</blockquote>
-            )}
-          </div>
-        ))}
-        {evidence?.chunks.map((c) => (
-          <div key={c.id}>
-            <small>{c.location}</small>
-            <p>{c.concepts.join(" · ")}</p>
-          </div>
-        ))}
-      </details>
-    </section>
+    <div className="source-processing-status">
+      {item.error ? <p role="alert">{userMessage(item.error)}</p> : <p className="muted small-text">Processing: {item.status}</p>}
+    </div>
   );
 }
 export function PreferencesPanel({ onRefresh }) {

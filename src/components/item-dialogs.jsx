@@ -1,3 +1,4 @@
+import { itemPreview } from "../lib/content-preview";
 import { useState } from "react";
 import {
   Plus,
@@ -20,6 +21,7 @@ import { SourceIcon, Logo } from "./brand";
 
 export function ItemDetail({
   item,
+  onCreateTag,
   topics,
   onClose,
   onSave,
@@ -33,6 +35,7 @@ export function ItemDetail({
   const fileUrl = useFileUrl(item.fileKey);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [newTag, setNewTag] = useState("");
   return (
     <Modal title="Saved item" onClose={onClose} wide>
       <div className="detail-layout">
@@ -57,7 +60,7 @@ export function ItemDetail({
                     : "Link only"}
             </span>
           </div>
-          <p>{item.description}</p>
+          {itemPreview(item) && <p>{itemPreview(item)}</p>}
           <EvidencePanel item={item} onRefresh={onRefresh} />
           {item.url && (
             <a
@@ -116,7 +119,7 @@ export function ItemDetail({
             />
           </label>
           <fieldset>
-            <legend>Collections</legend>
+            <legend>Tags</legend>
             <div className="topic-checkboxes">
               {topics.map((topic) => (
                 <label
@@ -138,6 +141,19 @@ export function ItemDetail({
                   {selectedTopics.includes(topic) && <Check size={12} />}
                 </label>
               ))}
+            </div>
+            <div className="tag-create-form">
+              <Input aria-label="Create a tag for this save" placeholder="New tag name" value={newTag} maxLength={50} onChange={e => setNewTag(e.target.value)} />
+              <Button type="button" className="button secondary" disabled={busy || !newTag.trim()} onClick={async () => {
+                const name = newTag.trim();
+                setBusy(true);
+                try {
+                  if (await onCreateTag(name)) {
+                    setSelectedTopics(current => [...new Set([...current, name])]);
+                    setNewTag("");
+                  }
+                } finally { setBusy(false); }
+              }}>Create tag</Button>
             </div>
           </fieldset>
           <label>
@@ -221,6 +237,8 @@ export function TopicModal({ onClose, onCreate }) {
 }
 
 export function SettingsModal({
+  tagsOnly = false,
+  onCreateTopic,
   data,
   demo,
   onClose,
@@ -230,6 +248,8 @@ export function SettingsModal({
 }) {
   const api = useApi();
   const [exportError, setExportError] = useState("");
+  const [newTag, setNewTag] = useState("");
+  const [tagBusy, setTagBusy] = useState(false);
   const [editing, setEditing] = useState(null),
     [name, setName] = useState(""),
     [remove, setRemove] = useState(null);
@@ -260,9 +280,9 @@ export function SettingsModal({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return (
-    <Modal title="Settings" onClose={onClose}>
+    <Modal title={tagsOnly ? "Manage tags" : "Settings"} onClose={onClose}>
       <div className="modal-body settings-body">
-        <section>
+        {!tagsOnly && <section>
           <h3>Your workspace</h3>
           <p>Manage your library and collections.</p>
           <Button className="button secondary" onClick={exportData}>
@@ -273,9 +293,21 @@ export function SettingsModal({
             Includes links, notes, and topics. Download attached originals from
             each item.
           </small>
-        </section>
+        </section>}
         <section>
-          <h3>Your collections</h3>
+          <h3>Your tags</h3>
+          <p>Tags group your saves into collections. Deleting a tag keeps its saves in your library.</p>
+          <form className="tag-create-form" onSubmit={async e => {
+            e.preventDefault();
+            if (!newTag.trim() || tagBusy) return;
+            setTagBusy(true);
+            try { if (await onCreateTopic(newTag.trim())) setNewTag(""); }
+            finally { setTagBusy(false); }
+          }}>
+            <Input aria-label="New tag name" placeholder="New tag name" value={newTag} maxLength={50} onChange={e => setNewTag(e.target.value)} required />
+            <Button className="button primary" disabled={tagBusy || !newTag.trim()}>{tagBusy ? "Creating…" : "Create tag"}</Button>
+          </form>
+          {!data.topics.length && <p className="muted">No tags yet. Create your first one above.</p>}
           {data.topics.map((topic) => (
             <div className="settings-topic" key={topic}>
               {editing === topic ? (
@@ -327,7 +359,7 @@ export function SettingsModal({
                     </Button>
                     <Button
                       className="icon-button"
-                      aria-label={`Remove collection ${topic}`}
+                      aria-label={`Delete tag ${topic}`}
                       onClick={() => setRemove(topic)}
                     >
                       <Trash2 size={14} />
@@ -338,28 +370,30 @@ export function SettingsModal({
               {remove === topic && (
                 <div className="collection-confirm">
                   <p>
-                    Remove this collection? Your saves will stay in the library.
+                    Delete this tag from all saves? Your saves will stay in the library.
                   </p>
                   <Button onClick={() => setRemove(null)}>Cancel</Button>
                   <Button
-                    onClick={() => {
-                      onRemoveTopic(topic);
-                      setRemove(null);
+                    disabled={tagBusy}
+                    onClick={async () => {
+                      setTagBusy(true);
+                      try { await onRemoveTopic(topic); setRemove(null); }
+                      finally { setTagBusy(false); }
                     }}
                   >
-                    Remove
+                    Delete tag
                   </Button>
                 </div>
               )}
             </div>
           ))}
         </section>
-        <PreferencesPanel onRefresh={onRefresh} />
-        <section className="settings-about">
+        {!tagsOnly && <PreferencesPanel onRefresh={onRefresh} />}
+        {!tagsOnly && <section className="settings-about">
           <Logo small />
 
           <span>No audio or vision processing</span>
-        </section>
+        </section>}
       </div>
     </Modal>
   );

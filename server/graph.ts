@@ -334,7 +334,7 @@ export class Library {
     }
     return !!result.length;
   }
-  async fail(item: Item, token: string, message: string, blocked = false) {
+  async fail(item: Item, token: string, message: string, blocked = false, retryAfterMs = 0) {
     await this.q(
       "MATCH (i:Item {id:$id,lease:$token,generation:$generation}) SET i.status=$status,i.error=$message,i.nextAttempt=$next,i.leaseUntil=0",
       {
@@ -344,7 +344,7 @@ export class Library {
         status:
           blocked || item.attempts >= config.MAX_ATTEMPTS ? "failed" : "queued",
         message: message.slice(0, 500),
-        next: Date.now() + Math.min(300000, 5000 * 2 ** item.attempts),
+        next: Date.now() + Math.max(retryAfterMs, Math.min(300000, 5000 * 2 ** item.attempts)),
       },
     );
   }

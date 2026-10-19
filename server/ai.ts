@@ -7,13 +7,14 @@ import { sourceQuote } from "./source-quote.js";
 import { subjectAssignments } from "./topic-policy.js";
 import { compactEvidence } from './ask-context.js';
 import { supportedTitle } from './item-title.js';
+import { parseModelResponse, providerRetryDelay } from './model-response.js';
 export { embeddings } from "./embeddings.js";
 let sdk: Groq;
 const client = () =>
   (sdk ||= new Groq({
     apiKey: required("GROQ_API_KEY"),
     timeout: 60000,
-    maxRetries: 1,
+    maxRetries: 0,
   }));
 export async function structured<T extends z.ZodType>(
   schema: T,
@@ -21,43 +22,45 @@ export async function structured<T extends z.ZodType>(
   instructions: string,
   input: string,
 ) {
+  const schemaOutput = z.toJSONSchema(schema);
+  const strictOutput = ['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(config.model);
   let response;
   try { response = await client().chat.completions.create({
     model: config.model,
     temperature: 0.1,
     max_completion_tokens: name === "retrieval_plan" ? 600 : name === "organization" ? 1800 : 1600,
-    response_format: { type: "json_object" },
+    ...(strictOutput ? {reasoning_effort:'low' as const} : {}),
+    response_format: strictOutput
+      ? {type:'json_schema',json_schema:{name,strict:true,schema:schemaOutput}}
+      : { type: "json_object" },
     messages: [
       {
         role: "system",
         content:
           instructions +
           " Return ONLY a JSON object conforming to this schema: " +
-          JSON.stringify(z.toJSONSchema(schema)),
+          JSON.stringify(schemaOutput),
       },
       { role: "user", content: input },
     ],
   }); } catch (error) {
     const status = (error as { status?: number }).status;
-    if (status === 429) throw new HttpError(429, "Text processing reached a temporary usage limit. Please retry later.");
+    if (status === 429) {
+      const limited = new HttpError(429, 'Text processing reached a temporary usage limit. Processing will retry automatically after the cooldown.');
+      limited.retryAfterMs = providerRetryDelay((error as {headers?:Headers}).headers?.get('retry-after') || null);
+      throw limited;
+    }
     if (status === 413) throw new HttpError(413, "The text processing request exceeds the model's size limit.");
     if (status === 401 || status === 403) throw new HttpError(status, "Text processing could not be authorized. Please contact the workspace owner.");
     if (status === 400) throw new HttpError(400, "The text model rejected this processing request.");
     throw error;
   }
-  let data: z.infer<T>;
-  try {
-    data = schema.parse(JSON.parse(response.choices[0]?.message.content || ""));
-  } catch {
-    throw new HttpError(
-      422,
-      "Groq returned an invalid structured result. Retry processing.",
-    );
-  }
+  const choice = response.choices[0];
+  const data = parseModelResponse(schema,choice?.message.content || '',choice?.finish_reason || '',name);
   return { data, usage: response.usage };
 }
 const classification = z.object({
-  displayTitle: z.object({title:z.string().max(100),quote:z.string().max(240),confidence:z.number().min(0).max(1)}).nullable().optional(),
+  displayTitle: z.object({title:z.string().max(100),quote:z.string().max(240),confidence:z.number().min(0).max(1)}).nullable(),
   assignments: z.array(
     z.object({
       name: z.string(),
